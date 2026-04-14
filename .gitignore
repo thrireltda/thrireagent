@@ -3,3 +3,5 @@ cortex/*
 memory/*
 
 .env
+*.txt
+*.cp
