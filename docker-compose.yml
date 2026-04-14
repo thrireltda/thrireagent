@@ -1,0 +1,50 @@
+services:
+  mbagent-memory:
+    image: chromadb/chroma:latest
+    container_name: mbagent-memory
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/data
+    volumes:
+      - ./memory:/data
+    ports:
+      - "8000:8000"
+  mbagent-cortex:
+    image: ollama/ollama:latest
+    container_name: mbagent-cortex
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    volumes:
+      - ./cortex:/root/.ollama
+  mbagent-core:
+    container_name: mbagent-core
+    image: mbagent
+    build:
+      context: .
+      dockerfile: DockerBuildFile
+    ports:
+      - "5000:5000"
+    volumes:
+      - .:/core
+    environment:
+      - MODEL_NAME=${MODEL_NAME}
+      - CORTEX_CONTAINER_NAME=${CORTEX_CONTAINER_NAME}
+      - CORTEX_PORT=${CORTEX_PORT}
+      - CORTEX_ENDPOINT=http://${CORTEX_CONTAINER_NAME}:${CORTEX_PORT}
+      - MEMORY_CONTAINER_NAME=${MEMORY_CONTAINER_NAME}
+      - MEMORY_PORT=${MEMORY_PORT}
+      - COLLECTION_NAME=${COLLECTION_NAME}
+      - BOOT_FILE_NAME=${BOOT_FILE_NAME}
+      - BOOT_FILE_PATH=./core/${BOOT_FILE_NAME}
+      - PROFILE_FILE_NAME=${PROFILE_FILE_NAME}
+      - PROFILE_FILE_PATH=./core/${PROFILE_FILE_NAME}
+    env_file:
+      - .env
+    depends_on:
+      - mbagent-cortex
+      - mbagent-memory

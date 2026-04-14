@@ -1,0 +1,5 @@
+#!/bin/bash
+# Envia a pergunta e usa o Python para extrair apenas o campo 'response' de forma limpa
+curl -s -X POST http://localhost:5000/ask \
+     -H "Content-Type: application/json" \
+     -d "{\"text\": \"$1\"}" | docker exec -i mbagent-core python3 -c "import sys, json; print(json.load(sys.stdin).get('response', 'Erro na resposta'))"

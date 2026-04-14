@@ -1,0 +1,39 @@
+#!/bin/bash
+
+until curl -s http://mbagent-memory:8000/api/v2/heartbeat > /dev/null; do sleep 2; done
+until curl -s http://mbagent-cortex:11434/api/tags > /dev/null; do sleep 5; done
+
+
+check_model() {
+  curl -s http://mbagent-cortex:11434/api/tags | grep -q "$1"
+}
+if ! check_model "$MODEL_NAME"; then
+  curl -X POST http://mbagent-cortex:11434/api/pull -d "{\"name\": \"$MODEL_NAME\"}"
+fi
+if ! check_model "nomic-embed-text"; then
+  curl -X POST http://mbagent-cortex:11434/api/pull -d "{\"name\": \"nomic-embed-text\"}"
+fi
+
+
+if [ ! -f "$PROFILE_FILE_PATH" ]; then
+    echo '{}' > "$PROFILE_FILE_PATH"
+    chmod 666 "$PROFILE_FILE_PATH"
+fi
+
+
+uvicorn core.main:app --host 0.0.0.0 --port 5000 &
+API_PID=$!
+until curl -s http://127.0.0.1:5000/ask > /dev/null; do 
+    sleep 2
+done
+if [ -f "$BOOT_FILE_PATH" ]; then
+    CONTENT=$(cat "$BOOT_FILE_PATH" | python3 -c 'import json, sys; print(json.dumps(sys.stdin.read()))')
+    curl -s -X POST http://127.0.0.1:5000/ask -H "Content-Type: application/json"  -d "{\"text\": $CONTENT}" > /dev/null
+    rm "$BOOT_FILE_PATH"
+fi
+kill $API_PID
+sleep 3
+
+
+curl -s -X POST http://mbagent-cortex:11434/api/generate -d "{\"model\": \"$MODEL_NAME\", \"keep_alive\": \"-1\"}" > /dev/null &
+exec uvicorn core.main:app --host 0.0.0.0 --port 5000
